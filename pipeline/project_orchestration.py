@@ -8,44 +8,34 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 import duckdb
 
-# ==========================================
-# 🔧 WINDOWS ENVIRONMENT FIX (CRITICAL)
-# ==========================================
-# Ensures Spark can write files on Windows without crashing
+
+#  WINDOWS ENVIRONMENT FIX (CRITICAL)
 os.environ['HADOOP_HOME'] = r"C:\hadoop"
 os.environ['hadoop.home.dir'] = r"C:\hadoop"
 os.environ['PATH'] = os.environ['PATH'] + ";" + r"C:\hadoop\bin"
 
-# ==========================================
-# ⚙️ ADVANCED CONFIGURATION
-# ==========================================
+#  ADVANCED CONFIGURATION
 class ProjectConfig:
     PROJECT_NAME = "Customer Analysis Pipeline"
     BASE_DIR = r"C:\Users\HP 15\Desktop\big data project\data"
     
-    # Inputs
     CSV_PATH = os.path.join(BASE_DIR, "nigerian_retail_and_ecommerce_customer_review_and_ratings_data.csv")
     ORDERS_PATH = os.path.join(BASE_DIR, "nigerian_retail_and_ecommerce_ecommerce_order_data.parquet")
     PURCHASE_PATH = os.path.join(BASE_DIR, "nigerian_retail_and_ecommerce_purchase_history_records.parquet")
     
-    # Outputs
     TEMP_OUTPUT = r"C:\big_data_processed\temp_spark_output"
     DB_PATH = r"C:\big_data_processed\processed\customer_analytics.duckdb"
     
-    # Settings
     SPARK_MEMORY = "8g"
 
-# ==========================================
-# 🛠️ ETL TASKS
-# ==========================================
-
+#  ETL TASKS
 @task(name="Extract & Transform (Spark)", 
       retries=2, 
       retry_delay_seconds=10, 
       log_prints=True,
       description="Resilient Spark job with auto-retry logic.")
 def spark_etl_process():
-    print(f"🚀 Initializing Spark Session ({ProjectConfig.SPARK_MEMORY})...")
+    print(f" Initializing Spark Session ({ProjectConfig.SPARK_MEMORY})...")
     spark = SparkSession.builder \
         .appName("CustomerAnalysis_ETL") \
         .config("spark.driver.memory", ProjectConfig.SPARK_MEMORY) \
@@ -54,13 +44,13 @@ def spark_etl_process():
         .getOrCreate()
 
     # 1. LOAD
-    print("📂 Ingesting Source Data...")
+    print("Ingesting Source Data...")
     df_reviews = spark.read.option("header", True).option("inferSchema", True).csv(ProjectConfig.CSV_PATH)
     df_orders = spark.read.parquet(ProjectConfig.ORDERS_PATH)
     df_purchase = spark.read.parquet(ProjectConfig.PURCHASE_PATH)
 
     # 2. TRANSFORM
-    print("⚙️ Distributed Transformations...")
+    print(" Distributed Transformations...")
     
     # Reviews Aggregation
     df_reviews_agg = df_reviews.select("customer_id", "review_id", "rating", "sentiment_score") \
@@ -93,7 +83,7 @@ def spark_etl_process():
         )
 
     # 3. MERGE
-    print("🔗 Merging DataFrames...")
+    print(" Merging DataFrames...")
     df_merged = df_reviews_agg.join(df_orders_agg, on="customer_id", how="full_outer") \
                               .join(df_purchase_agg, on="customer_id", how="full_outer") \
                               .fillna(0)
@@ -102,17 +92,17 @@ def spark_etl_process():
     if os.path.exists(ProjectConfig.TEMP_OUTPUT):
         shutil.rmtree(ProjectConfig.TEMP_OUTPUT, ignore_errors=True)
 
-    print(f"💾 Writing Staging Data: {ProjectConfig.TEMP_OUTPUT}")
+    print(f" Writing Staging Data: {ProjectConfig.TEMP_OUTPUT}")
     df_merged.write.mode("overwrite").parquet(ProjectConfig.TEMP_OUTPUT)
     
     count = df_merged.count()
-    print(f"✅ Spark Finished. Processed {count:,} records.")
+    print(f" Spark Finished. Processed {count:,} records.")
     spark.stop()
     return ProjectConfig.TEMP_OUTPUT
 
 @task(name="Load to DuckDB", log_prints=True)
 def load_to_duckdb(parquet_folder_path: str):
-    print(f"🦆 Loading into DuckDB: {ProjectConfig.DB_PATH}")
+    print(f" Loading into DuckDB: {ProjectConfig.DB_PATH}")
     os.makedirs(os.path.dirname(ProjectConfig.DB_PATH), exist_ok=True)
     con = duckdb.connect(ProjectConfig.DB_PATH)
     
@@ -123,13 +113,13 @@ def load_to_duckdb(parquet_folder_path: str):
     """)
     
     row_count = con.execute("SELECT COUNT(*) FROM customer_analytics").fetchone()[0]
-    print(f"🎉 Load Complete. {row_count:,} rows ready.")
+    print(f" Load Complete. {row_count:,} rows ready.")
     con.close()
     return row_count
 
 @task(name="Generate Business Report", log_prints=True, description="Generates a Markdown Artifact for the Dashboard.")
 def generate_quality_report():
-    print("🔍 Generating Advanced Data Report...")
+    print(" Generating Advanced Data Report...")
     con = duckdb.connect(ProjectConfig.DB_PATH)
     
     # 1. Calculation: Real Business Metrics
@@ -139,21 +129,19 @@ def generate_quality_report():
     
     # Check for empty table (Quality Gate)
     if total_customers == 0:
-        raise ValueError("❌ Critical Error: Database is empty after load!")
+        raise ValueError(" Critical Error: Database is empty after load!")
 
-    # 2. Advanced Feature: Create UI Artifact
-    # This creates a visible report in the Prefect Dashboard
     markdown_report = f"""
-# 📊 Nigerian Retail Pipeline Report
+#  Nigerian Retail Pipeline Report
 
-## 🟢 Executive Summary
+##  Executive Summary
 | Metric | Value |
 |:-------|:------|
 | **Total Customers** | `{total_customers:,}` |
 | **Total Revenue** | `₦{total_revenue:,.2f}` |
 | **Highest Single LTV** | `₦{top_customer_val:,.2f}` |
 
-## ✅ System Health
+##  System Health
 - **Spark Job:** Success (Resilient Mode)
 - **DuckDB Load:** Success (Bulk Insert)
 - **Quality Check:** Passed
@@ -165,15 +153,12 @@ def generate_quality_report():
         description="Daily Business Metrics"
     )
     
-    print("✅ Artifact Generated! Check the 'Artifacts' tab in the Dashboard.")
+    print(" Artifact Generated! Check the 'Artifacts' tab in the Dashboard.")
     con.close()
-
-# ==========================================
-# 🌊 MAIN FLOW
-# ==========================================
+#  MAIN FLOW
 @flow(name=ProjectConfig.PROJECT_NAME, log_prints=True)
 def main_flow():
-    print(f"🚀 STARTING PIPELINE: {ProjectConfig.PROJECT_NAME}")
+    print(f" STARTING PIPELINE: {ProjectConfig.PROJECT_NAME}")
     
     # Step 1: Distributed Processing
     staging_path = spark_etl_process()
@@ -184,30 +169,22 @@ def main_flow():
     # Step 3: Reporting & Observability (Advanced)
     generate_quality_report()
     
-    print("✅ End-to-End Pipeline Finished.")
+    print(" End-to-End Pipeline Finished.")
 
 if __name__ == "__main__":
-    # ---------------------------------------------------------
-    # PART 1: RUN ONCE (Visual Verification)
-    # ---------------------------------------------------------
+    # PART 1: Run the pipeline once immediately
     main_flow()
     
-    print("\n" + "█"*60)
-    print("✨ ADVANCED FEATURE: ARTIFACTS REPORT GENERATED ✨")
-    print("█"*60)
-    print("1. Scroll UP to find: 'Starting temporary server on http://127.0.0.1:xxxxx'")
-    print("   (OR check http://127.0.0.1:5000 if your local server is running)")
-    print("2. Open the link.")
-    print("3. Click the 'Artifacts' tab on the left.")
-    print("4. Take a screenshot of the Business Table.")
-    print("█"*60 + "\n")
+    print(" ADVANCED FEATURE: ARTIFACTS REPORT GENERATED ")
+    print("*"*60)
+    print("1. Check your dashboard: http://127.0.0.1:5000")
+    print("2. The system will now stay 'READY' for the daily schedule.")
+    print("*"*60 + "\n")
     
-    input("👉 Press ENTER to finish pipeline and register Schedule... ")
-
     # ---------------------------------------------------------
-    # PART 2: PRODUCTION SCHEDULE (Bonus Requirements)
+    # PART 2: START THE WORKER 
     # ---------------------------------------------------------
-    print("\n📅 Registering Daily Schedule (09:00 AM)...")
+    print("Registering Daily Schedule (09:00 AM) and entering 'READY' state...")
     
     main_flow.serve(
         name="daily-customer-analysis-production",
